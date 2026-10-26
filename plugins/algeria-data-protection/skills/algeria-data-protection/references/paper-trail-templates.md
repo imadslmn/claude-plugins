@@ -55,8 +55,8 @@ Décision selon l'arbre du skill `algeria-data-protection`.
 
 | Flux | Destination | Pays | Contenu envoyé | Données personnelles ? | Décision | Fondement / autorisation | Garanties |
 |---|---|---|---|---|---|---|---|
-| F1 — extraction factures | API <fournisseur IA> | US | Texte OCR anonymisé, classes de jetons : ORG, PHONE | Non (jetons uniquement) | Passerelle, lane foreign | n/a — aucun transfert de données identifiantes | ZDR contractuel, DPA signé, chiffrement TLS, journal d'audit |
-| F2 — scoring CV | Modèle local (vLLM) | DZ | CV complet | Oui | Lane local | Traitement local, aucun transfert | — |
+| F1 — extraction factures | API <fournisseur IA> | US | Texte OCR anonymisé, classes de jetons : ORG, PHONE | Non (jetons uniquement) | Passerelle, dé-identifié | n/a — aucun transfert de données identifiantes | ZDR contractuel, DPA signé, chiffrement TLS, journal d'audit |
+| F2 — scoring candidats | API <fournisseur IA> | US | Profil dé-identifié : identifiant de substitution, expérience, langues, wilaya, dernier poste — sans nom, contact, date de naissance ni photo | Non (vue dé-identifiée) | Passerelle, redesign « substitut + attributs » | n/a — aucun transfert de données identifiantes | ZDR contractuel, DPA signé, assertion d'egress |
 | F3 — notifications WhatsApp | Meta (WhatsApp Business API) | IE/US | Numéro, prénom, texte du message | Oui | Exception | Contact initié par l'utilisateur ; exécution du contrat ; mention dans la politique de confidentialité | Minimisation du contenu |
 | F4 — sauvegardes | <hébergeur> | DZ | Base complète chiffrée | Oui | Résidence | Aucun transfert | AES-256, clés en Algérie |
 

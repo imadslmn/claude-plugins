@@ -34,8 +34,10 @@ configuration that avoids the transfer regime is one where no personal data is i
   It replaces names, phones, NIN/NIF/RC, bank identifiers, addresses and other identifiers with
   typed placeholders before the call, asserts nothing identifying remains in the outbound payload,
   and restores the values after the response.
-- **Local-model lane** — tasks that are *about* a person (CV scoring, children's or health data)
-  run on an open-weight model hosted in Algeria.
+- **No self-hosted model** — tasks that seem to be *about* a person (CV scoring, reminders,
+  reports) are redesigned so the model works on surrogates and attributes and the identity is
+  re-attached on the Algerian side; sensitive fields (health, biometric, children's health) are
+  handled by deterministic code, never by AI.
 - **Paper wall** — a `compliance/` folder in every repo: processing register, data-flow map,
   retention schedule, breach procedure, DPIA triggers, privacy policy (FR/AR), consent copy, and a
   processor annex for proposals and contracts.

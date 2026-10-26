@@ -8,7 +8,7 @@ has a placeholder class used by the gateway (`<CLASS_n>`). Regexes are starting 
 
 | Class | What | Format notes | Regex sketch |
 |---|---|---|---|
-| `PERSON` | Names, Latin and Arabic script, with or without titles (M., Mme, Dr, Si, Hadj, السيد, السيدة) | Regex alone is weak; combine a title-triggered regex with a local NER model for free text | `(?:M\.|Mme|Mlle|Dr|Pr|Si|Hadj|السيد|السيدة|الدكتور)\s+[\p{L}'\-]+(?:\s+[\p{L}'\-]+){0,3}` |
+| `PERSON` | Names, Latin and Arabic script, with or without titles (M., Mme, Dr, Si, Hadj, السيد, السيدة) | Regex alone is weak; combine a title-triggered regex with a small CPU NER classifier (GLiNER/spaCy, not an LLM) for free text | `(?:M\.|Mme|Mlle|Dr|Pr|Si|Hadj|السيد|السيدة|الدكتور)\s+[\p{L}'\-]+(?:\s+[\p{L}'\-]+){0,3}` |
 | `PHONE` | Mobile 05/06/07 + 8 digits; landline 0 + area + 7 digits; international +213 / 00213 | Spaces, dots, dashes between groups are common | `(?:\+213|00213|0)[\s.\-]?[5-7](?:[\s.\-]?\d){8}` and `(?:\+213|00213|0)[\s.\-]?[2-4]\d(?:[\s.\-]?\d){7}` |
 | `EMAIL` | Email addresses | | standard |
 | `NIN` | Numéro d'identification national (CNIBE / passport) — 18 digits | Often starts with 1 or 2; appears on ID scans and HR records | `\b[12]\d{17}\b` |
@@ -18,7 +18,7 @@ has a placeholder class used by the gateway (`<CLASS_n>`). Regexes are starting 
 | `AI` | Article d'imposition — 11 digits | Tax ID shown on invoices | `\b\d{11}\b` (context-gated to "AI" / "Art" labels) |
 | `BANK` | RIB (20 digits: 3 bank + 5 agency + 10 account + 2 key), CCP (`\d{7,10}` key `\d{2}`), IBAN DZ (`DZ` + 22 digits), card numbers | | `\b\d{3}\s?\d{5}\s?\d{10}\s?\d{2}\b`, `\bDZ\d{2}(?:\s?\d{4}){5}\d{2}\b`, `\bCCP\s*n?°?\s*\d{7,10}(?:\s*(?:clé|cle)?\s*\d{2})?` |
 | `PLATE` | Vehicle plate `\d{5,6} \d{3} \d{2}` (number, year/category, wilaya) | | `\b\d{5,6}[\s\-]?\d{3}[\s\-]?\d{2}\b` |
-| `ADDRESS` | Postal addresses, cités, lots, BP, wilaya + commune combos | Hard with regex; gate on keywords (rue, cité, lot, bloc, bt, n°, BP, حي, شارع) + local NER | keyword-triggered span up to the next line/period |
+| `ADDRESS` | Postal addresses, cités, lots, BP, wilaya + commune combos | Hard with regex; gate on keywords (rue, cité, lot, bloc, bt, n°, BP, حي, شارع) + CPU NER classifier | keyword-triggered span up to the next line/period |
 | `DOB` | Dates of birth | Only when near "né(e) le", "date de naissance", "تاريخ الميلاد"; other dates are fine to send | context-gated date regex |
 | `GEO` | Latitude/longitude pairs, GPS traces | Pointage app, delivery apps | `-?\d{1,2}\.\d{4,},\s*-?\d{1,3}\.\d{4,}` |
 | `IP` / `DEVICE` | IPv4/6, IMEI (15 digits), push tokens, device IDs | | standard |
@@ -32,11 +32,11 @@ has a placeholder class used by the gateway (`<CLASS_n>`). Regexes are starting 
 - Job title + company + city (e.g. "DRH chez X à Blida") identifies a single person → coarsen to role
   category or redact the company for small companies.
 - Exact salary, exact dates of events (hire, dismissal, birth of a child), diagnoses, school class →
-  coarsen (ranges, month precision) or route to the local lane.
+  coarsen (ranges, month precision) or strip the field from the view.
 - Free text written by or about a person (support tickets, reviews, complaints, CV bodies, meeting
-  notes) → assume it contains names and phones; run the full redactor plus NER.
+  notes) → assume it contains names and phones; run the full redactor plus a CPU NER classifier.
 
-## Sensitive data — never leaves Algeria; local lane only
+## Sensitive data — never leaves Algeria; handled by deterministic code, not AI
 
 Health (certificates, allergies, diagnoses, prescriptions, sick leave reasons), biometric (face
 templates, fingerprints, voice prints), religion, political opinion, union membership, ethnic origin,

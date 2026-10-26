@@ -4,7 +4,7 @@ Reference PII redactor for Algerian-format personal data.
 
 Stdlib only. Use as a starting point for the project's `ai_gateway/redactor.py`; port to
 TypeScript for Node projects. Regex handles structured identifiers well; for free text with
-names and addresses, add a local NER model (see references/pii-algeria.md) and feed its spans
+names and addresses, add a small CPU NER classifier such as GLiNER or spaCy (see references/pii-algeria.md) and feed its spans
 into `Redactor.add_spans()`.
 
     from pii_redactor import Redactor

@@ -89,8 +89,10 @@ Does the payload contain personal data (per the taxonomy)?
    (classify, summarize, extract amounts/dates, draft from a template, translate, answer from a KB)
    ├─ Yes ──▶ Route through ai_gateway with redaction/tokenization. ─▶ OK. Document the token classes sent.
    └─ No  (the task is *about* the person: "write to Mr X", "score this CV", "diagnose this child")
-      Can a model hosted in Algeria do it well enough?
-      ├─ Yes ──▶ Self-host an open-weight model (see "Local model lane"). ─▶ OK.
+      Can the feature be redesigned so the model works on a de-identified view?
+      (surrogate ids + attributes instead of identity; coarsened fields; the model produces a
+       template and the Algerian side fills in the name; sensitive fields handled by rules, not AI)
+      ├─ Yes ──▶ Redesign, then route through ai_gateway. ─▶ OK. Document the view sent.
       └─ No
          Is there a statutory exception that fits cleanly?
          (express, informed consent naming the transfer; necessity to perform a contract
@@ -99,10 +101,18 @@ Does the payload contain personal data (per the taxonomy)?
          │          Still file the flow in the ANPDP declaration. Legal review before go-live.
          └─ No  ──▶ Client files an ANPDP authorization dossier for this flow.
                     The flow is feature-flagged OFF until written authorization exists.
+                    Sensitive data (health, biometric, children's health): never on this branch;
+                    do it without AI or not at all.
 ```
 
 Never resolve the last branch by "we'll fix it later". Starting a transfer while the authorization is
 pending is itself an offence, independently of the outcome.
+
+**There is no self-hosted LLM in this posture.** Solrus does not run open-weight models in Algeria;
+every model call goes to a foreign provider through the gateway. That makes the redesign branch and
+the consent branch the only two ways to ship a feature that needs identity, so push hard on the
+redesign branch first — most "about the person" tasks are really "about the attributes", and the
+identity can be re-attached on the Algerian side after the model answers.
 
 ## Architecture: the egress gateway
 
@@ -126,11 +136,19 @@ TypeScript skeletons). The essentials:
   product codes, durations, counts) and opaque surrogate keys. Join back locally.
 - **Documents and images.** OCR locally (Tesseract / PaddleOCR / docTR on the Algerian server), then
   redact the text, then send text. Do not send scans of IDs, contracts, CVs, or invoices from
-  individuals to a vision API. If a vision model is required, mask regions locally first or route to
-  the local model lane.
-- **RAG / embeddings.** Embed with a local model (bge-m3, multilingual-e5, nomic) on Algerian
-  infrastructure so chunks containing names never leave. If a foreign embedding API is unavoidable,
-  redact chunks before embedding and accept the retrieval quality hit on name-based queries.
+  individuals to a vision API. If a vision model is required on a document that carries identity
+  (an ID card, a signed contract), mask those regions locally first (OCR gives you the coordinates
+  of what the redactor matched; black them out before the image leaves) or put the flow on the
+  consent/authorization branch.
+- **RAG / embeddings.** Redact chunks before they are embedded, whichever embedding API is used,
+  so the vector store and the provider only ever hold de-identified text. Keep the vector store in
+  Algeria (pgvector in the project's Postgres is enough for SME scale). Accept the retrieval hit on
+  name-based queries; route "find everything about Mr X" through a plain DB lookup, not the index.
+- **Free-text names and addresses.** Regex catches structured identifiers; for names in running
+  text (Arabic and Latin, nicknames, places) add a small CPU NER library on the Algerian server
+  (GLiNER, spaCy `fr`, or a fine-tuned token classifier — classifiers, not LLMs) and feed its spans
+  into the redactor. Measure recall on the project's fixtures; where it is not good enough, coarsen
+  the input instead (send the ticket category and the question, not the whole ticket).
 - **Provider settings as policy.** Use the provider's zero-retention / no-training organisation
   setting, disable provider-side prompt logging, pin the data-processing region if offered, and keep
   the signed DPA in `compliance/dpa/`. These are *safeguards* that go in the dossier, not permissions.
@@ -138,24 +156,42 @@ TypeScript skeletons). The essentials:
   redactor version. Never log raw prompts or responses at INFO. Self-host Langfuse/Phoenix in
   Algeria if tracing is needed; never LangSmith/Helicone/cloud tracing. Same for Sentry: self-hosted
   GlitchTip/Sentry in Algeria, with PII scrubbing on.
-- **Kill switch.** A single env var (`AI_EGRESS_ENABLED=false`) must make the gateway fall back to the
-  local lane or return a graceful error. A client inspection or incident should never require a
-  code deploy to stop the flow.
+- **Kill switch.** A single env var (`AI_EGRESS_ENABLED=false`) must make the gateway return a
+  graceful "AI features paused" error and let the rest of the application keep working. A client
+  inspection or incident should never require a code deploy to stop the flow, and no feature should
+  be designed so that the app is unusable when the gateway is off.
 - **Tests.** The redactor has a fixture file of Algerian-format samples (phone, NIN, NIF, RIB, Arabic
   names, mixed FR/AR text) and a test asserting none survive. The gateway has a test asserting that a
   request with those fixtures produces an outbound payload containing zero of them.
 
-## Local model lane
+## Redesigning "about the person" features so they can cross the border
 
-For flows that cannot be de-identified, or for sensitive-data projects, run an open-weight model on
-Algerian infrastructure (vLLM / llama.cpp / Ollama on a GPU VPS or the client's on-prem box). Typical
-choices: Qwen 3 family for FR/AR/EN, Gemma 3 or Llama for lighter loads, a quantized 8–14B model for
-redaction/NER and classification. Size the box for the task, not for the demo. Document in
-`compliance/DATA-FLOWS.md` that the flow is "traitement local, aucun transfert".
+Since no model runs in Algeria, a feature that seems to need identity has to be reshaped until it
+doesn't. The moves that work, in the order to try them:
 
-The local lane is also the right home for the redactor itself when regex is not enough (free text
-with Arabic names, nicknames, places): a small local NER model (GLiNER, a fine-tuned token classifier,
-or an 8B instruct model with a strict JSON schema) finds entities, regex handles structured formats.
+1. **Surrogate + attributes.** Replace the person with `<ID_1>` and send only the attributes the
+   task needs. "Score this candidate for the sales role" becomes "score this profile: 6 years B2B
+   sales, French C1, Arabic native, wilaya 16, last role: key accounts" — no name, no phone, no
+   date of birth, no photo. The ranking comes back keyed by surrogate; the Algerian side joins it.
+2. **Template out, fill in locally.** "Write a payment reminder to Mr X about invoice F-0412" becomes
+   "write a payment reminder for `<PERSON_1>` about invoice `<ID_1>` of 125 000 DZD, 30 days late";
+   re-hydration puts the name back. The model never needed to know who.
+3. **Coarsen what identifies indirectly.** Exact dates → month; exact salary → band; small company
+   + title → role category; street address → wilaya/commune. Keep the fields that carry the signal.
+4. **Rules, not AI, for sensitive fields.** Allergies, medical certificates, disciplinary records,
+   biometric checks: handle with deterministic code on the Algerian server. The AI can work on the
+   rest of the record with those fields stripped.
+5. **Split the task.** If one prompt needs both identity and judgement, split it: the judgement
+   step crosses the border de-identified, the identity-bearing step (lookup, notification, filing)
+   stays in plain code.
+6. **Consent as the last resort, and only for the person who can give it.** B2C flows (a customer
+   chatting on WhatsApp, a parent using the crèche app) can carry an express, informed consent to the
+   specific transfer, collected at onboarding and logged. Employee data under a power imbalance and
+   children's data are weak ground for consent — keep those on moves 1–5.
+
+Write the chosen move into `compliance/DATA-FLOWS.md` next to the flow, with the exact view or
+placeholder classes that leave. If none of the six moves fits and the data is sensitive, the feature
+is not built with AI.
 
 ## Common leak points to check on every project
 
@@ -208,7 +244,7 @@ keeps its own processor register. Put a data-processing annex in every Solrus pr
 
 1. **Project kickoff / proposal / CDC**: list the data categories and every system outside Algeria the
    project will touch. Run the decision tree per flow. Put the result and the architecture (gateway +
-   residency + local lane) in the proposal's data-protection section. Flag any flow that needs an
+   residency + redesign moves) in the proposal's data-protection section. Flag any flow that needs an
    ANPDP authorization as a milestone with a lead time of 1–3 months, before the dependent feature.
 2. **Scaffolding**: create `ai_gateway/`, `compliance/`, the redactor fixture tests, the egress audit in
    CI, and the kill switch env var. Pin the provider allowlist.
