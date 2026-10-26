@@ -1,0 +1,20 @@
+{
+  "name": "solrus",
+  "description": "Solrus plugins for Claude Code — engineering and compliance skills for building software and AI automations for Algerian businesses.",
+  "owner": {
+    "name": "Imad — Solrus",
+    "url": "https://solrus.pro"
+  },
+  "plugins": [
+    {
+      "name": "algeria-data-protection",
+      "source": "./plugins/algeria-data-protection",
+      "description": "Keep AI-backed projects compliant with Algeria's personal-data law (18-07 / 25-11, ANPDP): data residency, a de-identifying egress gateway for foreign LLM APIs, and the compliance paper trail.",
+      "version": "1.0.0",
+      "author": { "name": "Imad — Solrus", "url": "https://solrus.pro" },
+      "homepage": "https://github.com/imadslmn/claude-plugins",
+      "license": "MIT",
+      "keywords": ["algeria", "data-protection", "anpdp", "loi-18-07", "privacy", "llm", "compliance"]
+    }
+  ]
+}

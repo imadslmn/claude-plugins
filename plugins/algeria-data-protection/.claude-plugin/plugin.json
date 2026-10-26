@@ -1,0 +1,10 @@
+{
+  "name": "algeria-data-protection",
+  "version": "1.0.0",
+  "description": "Keep AI-backed projects compliant with Algeria's personal-data law (18-07 / 25-11, ANPDP): data residency, a de-identifying egress gateway for foreign LLM APIs, and the compliance paper trail.",
+  "author": { "name": "Imad — Solrus", "url": "https://solrus.pro" },
+  "homepage": "https://github.com/imadslmn/claude-plugins",
+  "repository": "https://github.com/imadslmn/claude-plugins",
+  "license": "MIT",
+  "keywords": ["algeria", "data-protection", "anpdp", "loi-18-07", "privacy", "llm", "compliance"]
+}
